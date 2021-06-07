@@ -15,6 +15,7 @@ Library           RPA.FileSystem
 Library           Collections
 Library           RPA.Robocloud.Secrets
 Library           RPA.Archive
+Library           RPA.Dialogs
 
 # -
 
@@ -25,9 +26,21 @@ ${MAX_ATTEMPTS}=    5
 
 
 *** Keywords ***
+Ask User to Proceed
+    ${proceed}    Set Variable   False
+    Add icon      Warning
+    Add heading   Proceed to order 20 Robots?
+    Add submit buttons    buttons=No,Yes    default=Yes
+    ${result}=    Run dialog
+    IF   $result.submit == "Yes"
+        ${proceed}    Set Variable    True
+    END
+    [return]    ${proceed}
+
+*** Keywords ***
 Download The CSV File
     ${urls}=    Get Secret    urls
-    Download    ${urls}[csv_url]    overwrite=Tru
+    Download    ${urls}[csv_url]    overwrite=True
 
 
 *** Keywords ***
@@ -71,7 +84,7 @@ Preview the robot
             Exit For Loop If    True
         ELSE
             Click Button                     id:preview
-            # Wait Until Element Is Visible    id:robot-preview-image
+            Sleep    1
         END
     END
 
@@ -84,7 +97,7 @@ Submit the order
             Exit For Loop If    True
         ELSE
             Click Button                     id:order
-            # Wait Until Element Is Visible    id:receipt
+            Sleep    1
         END
     END 
 
@@ -106,8 +119,6 @@ Take a screenshot of the robot
 *** Keywords ***
 Embed the robot screenshot to the receipt PDF file    
     [Arguments]    ${screenshot}    ${pdf}
-    #@{files}=     Create List    ${screenshot}:x=25,y=100
-    #Add Files To PDF    ${files}    ${pdf}    append-true
     Add Watermark Image To PDF    image_path=${screenshot}    source_path=${pdf}    output_path=${pdf}    coverage=0.2
     Close Pdf    ${pdf}
 
@@ -126,19 +137,22 @@ Close The Browser
 
 *** Tasks ***
 Order robots from RobotSpareBin Industries Inc
-    ${orders}=    Get orders
-    Open the robot order website
-    FOR    ${row}    IN    @{orders}
-         Close the annoying modal
-         Fill the form    ${row}
-         Preview the robot
-         Submit the order
-         ${pdf}=    Store the receipt as a PDF file    ${row}[Order number]
-         ${screenshot}=    Take a screenshot of the robot    ${row}[Order number]
-         Embed the robot screenshot to the receipt PDF file    ${screenshot}    ${pdf}
-         Go to order another robot
+    ${proceed}=    Ask User to Proceed
+    IF    ${proceed}
+        ${orders}=    Get orders
+        Open the robot order website
+        FOR    ${row}    IN    @{orders}
+             Close the annoying modal
+             Fill the form    ${row}
+             Preview the robot
+             Submit the order
+             ${pdf}=    Store the receipt as a PDF file    ${row}[Order number]
+             ${screenshot}=    Take a screenshot of the robot    ${row}[Order number]
+             Embed the robot screenshot to the receipt PDF file    ${screenshot}    ${pdf}
+             Go to order another robot
+        END
+        Create a ZIP file of the receipts
     END
-    Create a ZIP file of the receipts
-    Close The Browser
+    [Teardown]    Close The Browser
 
 
